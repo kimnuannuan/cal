@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-"""夜班（二唤/一唤/三唤）→ .ics 生成器
+"""夜班（一唤/二唤/三唤）→ .ics 生成器
 
-与 make_ics.py 的区别：夜班是「当日 17:00 → 次日 08:00」的定时事件（不是全天事件），
-时间用 UTC 表示（17:00 CST = 09:00Z；次日 08:00 CST = 次日 00:00Z），避免 VTIMEZONE 兼容问题。
+用户口径（2026-11-26 确认，勿改）：
+  * SUMMARY 只写班名，如「二唤」—— 不带时段；
+  * 时长 = 当日 17:00 → 当日 24:00，**不跨天**；
+  * 文件内**不写 VALARM**（提醒统一由 QQ cron 推送）。
+
+时间用 UTC 表达：17:00 CST = 09:00Z；当日 24:00 CST = 当日 16:00Z。
 
 用法：
-    python3 make_night_ics.py --name 金欣星 --label 二唤 \
-        --out /home/ubuntu/schedules/2026-12_金欣星_二唤.ics spec.txt
+    python3 make_night_ics.py --name 金欣星 --label 二唤 --month 2026-12 \
+        --out /path/2026-12_金欣星_二唤.ics spec.txt
 
 spec.txt 每行（`#` 注释）：
     2026-12-08|一唤:郑一禾|三唤:王苏
     2026-12-19|一唤:吕添|三唤:罗丽敏
-
-输出：写文件 + 打印摘要 + 结构自校验。
 """
 import argparse
 import datetime
@@ -62,8 +64,7 @@ def build(name, label, rows, month):
     ]
     for date_s, peer1, peer3, _ in rows:
         d = datetime.date.fromisoformat(date_s)
-        nxt = d + datetime.timedelta(days=1)
-        desc = [f"{name}｜{label}值班｜夜班 17:00-次日08:00",
+        desc = [f"{name}｜{label}值班｜当日 17:00-24:00",
                 "负责各院区夜班会诊；联系三唤；三唤负责院外会诊"]
         if peer1:
             desc.append(peer1)
@@ -73,11 +74,9 @@ def build(name, label, rows, month):
             "BEGIN:VEVENT",
             f"UID:{name}-{label}-{d.strftime('%Y%m%d')}@hermes.local",
             f"DTSTAMP:{stamp}",
-            # 17:00 CST = 09:00Z
-            f"DTSTART:{d.strftime('%Y%m%d')}T090000Z",
-            # 次日 08:00 CST = 次日 00:00Z
-            f"DTEND:{nxt.strftime('%Y%m%d')}T000000Z",
-            _fold("SUMMARY:" + _esc(f"{label}（夜班 17:00-次日08:00）")),
+            f"DTSTART:{d.strftime('%Y%m%d')}T090000Z",   # 17:00 CST
+            f"DTEND:{d.strftime('%Y%m%d')}T160000Z",     # 当日 24:00 CST（不跨天）
+            _fold("SUMMARY:" + _esc(label)),
             _fold("LOCATION:" + _esc("浙大一院（各院区夜班会诊）")),
             _fold("DESCRIPTION:" + _esc("｜".join(desc))),
             "TRANSP:OPAQUE",
@@ -92,11 +91,12 @@ def verify(path):
     text = raw.decode("utf-8")
     checks = {
         "无BOM": not raw.startswith(b"\xef\xbb\xbf"),
-        "CRLF行尾": raw.count(b"\r\n") >= 10,
+        "CRLF行尾": raw.count(b"\r\n") >= 5,
         "BEGIN起始": text.startswith("BEGIN:VCALENDAR"),
         "END结尾": text.rstrip().endswith("END:VCALENDAR"),
-        "VALARM配对": raw.count(b"BEGIN:VALARM") == raw.count(b"END:VALARM") > 0,
-        "VEVENT配对": raw.count(b"BEGIN:VEVENT") == raw.count(b"END:VEVENT"),
+        "无VALARM": raw.count(b"BEGIN:VALARM") == 0,
+        "VEVENT配对": raw.count(b"BEGIN:VEVENT") == raw.count(b"END:VEVENT")
+                      and raw.count(b"BEGIN:VEVENT") > 0,
     }
     print("  校验: " + "  ".join(("✓" if v else "✗") + k for k, v in checks.items()))
     return all(checks.values())
