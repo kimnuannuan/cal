@@ -12,7 +12,7 @@ python3 scripts/make_night_ics.py --name 本人 --label 二唤 --month 2026-12 \
 python3 - <<'PY'
 import pathlib
 fix = {
-    'dist/shift.ics':  ('X-WR-CALNAME:2026-12 排班 本人',  'X-WR-CALNAME:班 2026-12'),
+    'dist/shift.ics':  ('X-WR-CALNAME:2026-12 排班 本人',  'X-WR-CALNAME:排班 2026-12'),
     'dist/ercall.ics': ('X-WR-CALNAME:2026-12 二唤 本人',  'X-WR-CALNAME:二唤 2026-12'),
 }
 for f,(old,new) in fix.items():
